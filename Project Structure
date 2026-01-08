@@ -1,0 +1,28 @@
+multi-class-classification-dnn/
+│
+├── data/
+│   ├── raw/
+│   │   └── dataset.csv
+│   └── processed/
+│       └── processed_data.csv
+│
+├── notebooks/
+│   └── eda_multiclass.ipynb
+│
+├── models/
+│   └── best_model.h5
+│
+├── src/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── data_loader.py
+│   ├── preprocessing.py
+│   ├── model.py
+│   ├── train.py
+│   ├── evaluate.py
+│   └── tune.py
+│
+├── main.py
+├── requirements.txt
+├── README.md
+└── .gitignore
