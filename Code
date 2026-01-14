@@ -1,0 +1,134 @@
+!pip install tensorflow pandas numpy scikit-learn
+
+#multiclass_dnn.py
+
+import numpy as np
+import pandas as pd
+
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import f1_score, classification_report
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+
+data = pd.read_csv("dataset.csv")
+
+TARGET_COLUMN = "target"
+
+X = data.drop(columns=[TARGET_COLUMN])
+y = data[TARGET_COLUMN]
+
+# Encode target labels
+label_encoder = LabelEncoder()
+y_encoded = label_encoder.fit_transform(y)
+
+# Scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled,
+    y_encoded,
+    test_size=0.2,
+    random_state=42,
+    stratify=y_encoded
+)
+
+
+#Deep Neural Network Architecture
+def build_model(input_dim, num_classes, learning_rate):
+    model = Sequential()
+    
+    model.add(Dense(128, activation="relu", input_shape=(input_dim,)))
+    model.add(Dropout(0.3))
+    
+    model.add(Dense(64, activation="relu"))
+    model.add(Dropout(0.3))
+    
+    model.add(Dense(num_classes, activation="softmax"))
+    
+    model.compile(
+        optimizer=Adam(learning_rate=learning_rate),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+    
+    return model
+
+#Cross-Validation + Hyperparameter Tuning
+learning_rates = [0.01, 0.001]
+batch_sizes = [16, 32]
+
+best_f1 = 0
+best_config = None
+best_model = None
+
+kfold = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+
+for lr in learning_rates:
+    for batch_size in batch_sizes:
+        f1_scores = []
+        
+        for train_idx, val_idx in kfold.split(X_train, y_train):
+            X_tr, X_val = X_train[train_idx], X_train[val_idx]
+            y_tr, y_val = y_train[train_idx], y_train[val_idx]
+            
+            model = build_model(
+                input_dim=X_tr.shape[1],
+                num_classes=len(np.unique(y_train)),
+                learning_rate=lr
+            )
+            
+            model.fit(
+                X_tr,
+                y_tr,
+                epochs=30,
+                batch_size=batch_size,
+                verbose=0
+            )
+            
+            preds = model.predict(X_val)
+            y_pred = np.argmax(preds, axis=1)
+            f1 = f1_score(y_val, y_pred, average="macro")
+            f1_scores.append(f1)
+        
+        mean_f1 = np.mean(f1_scores)
+        print(f"LR={lr}, Batch={batch_size}, F1={mean_f1:.4f}")
+        
+        if mean_f1 > best_f1:
+            best_f1 = mean_f1
+            best_config = (lr, batch_size)
+            best_model = model
+
+print("\nBest Configuration:", best_config)
+print("Best CV F1-Score:", best_f1)
+
+final_model = build_model(
+    input_dim=X_train.shape[1],
+    num_classes=len(np.unique(y_train)),
+    learning_rate=best_config[0]
+)
+
+final_model.fit(
+    X_train,
+    y_train,
+    epochs=50,
+    batch_size=best_config[1],
+    verbose=1
+)
+
+test_predictions = final_model.predict(X_test)
+y_test_pred = np.argmax(test_predictions, axis=1)
+
+final_f1 = f1_score(y_test, y_test_pred, average="macro")
+
+print("\n Final Test F1-Score:", final_f1)
+print("\nClassification Report:")
+print(classification_report(y_test, y_test_pred))
+
+final_model.save("multiclass_dnn_model.h5")
+print("\n Model saved successfully!")
